@@ -13,45 +13,34 @@ export async function POST(
   try {
     await connectDB();
     const reqBody = await request.json();
+
     const session = await getServerSession(authOptions);
-    if (!session?.user.id && !session?.user.email) {
+
+    if (!session?.user?.id && !session?.user?.email) {
       return NextResponse.json(
-        { message: "Unautheticated User" },
+        { message: "Unauthenticated User" },
         { status: 401 }
       );
     }
+
+    // Collect members from request + owner
     const membersId: string[] = reqBody.emails.map((item: any) => item.value);
-    membersId.push(session?.user.id.toString());
+    membersId.push(session.user.id.toString());
 
-    // const objectIdInstances = membersId.map(
-    //   (id) => new mongoose.Types.ObjectId(id)
-    // );
-
-    // const existingDocument = await GroupRegistration.findOne({
-    //   userId: { $in: objectIdInstances },
-    //   eventId: new mongoose.Types.ObjectId(params.id),
-    // }).select("_id");
-
-    // if (existingDocument) {
-    //   return NextResponse.json(
-    //     { message: "Refresh the page!" },
-    //     { status: 409 }
-    //   );
-    // }
-
+    // Create a group document
     const group = await Group.create({
       eventId: params.id,
       ownerId: session.user.id,
     });
 
-    const data = membersId.map((member: string) => {
-      return {
-        groupId: new mongoose.Types.ObjectId(group._id),
-        eventId: new mongoose.Types.ObjectId(params.id),
-        userId: new mongoose.Types.ObjectId(member),
-      };
-    });
+    // Prepare registration data
+    const data = membersId.map((member: string) => ({
+      groupId: new mongoose.Types.ObjectId(group._id),
+      eventId: new mongoose.Types.ObjectId(params.id),
+      userId: new mongoose.Types.ObjectId(member),
+    }));
 
+    // Insert registrations
     const groupRegistered = await GroupRegistration.insertMany(data);
 
     if (!groupRegistered) {
@@ -60,9 +49,10 @@ export async function POST(
         { status: 500 }
       );
     }
+
     return NextResponse.json({ message: "Group Registered!" }, { status: 200 });
   } catch (error) {
-    console.log(error);
+    console.error("Group Registration Error:", error);
     return NextResponse.json(
       { message: "Internal Server Error" },
       { status: 500 }
