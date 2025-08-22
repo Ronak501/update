@@ -1,19 +1,20 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { authOptions } from "../../../auth/[...nextauth]/authOptions";
 import connectDB from "../../../../../db";
 import Group from "../../../../../models/group.model";
 import GroupRegistration from "../../../../../models/groupRegistration.model";
 import mongoose from "mongoose";
-import { getServerSession } from "next-auth";
-import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
+    const { params } = context;
     await connectDB();
-    const reqBody = await request.json();
 
+    const reqBody = await request.json();
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id && !session?.user?.email) {
@@ -23,24 +24,20 @@ export async function POST(
       );
     }
 
-    // Collect members from request + owner
     const membersId: string[] = reqBody.emails.map((item: any) => item.value);
     membersId.push(session.user.id.toString());
 
-    // Create a group document
     const group = await Group.create({
       eventId: params.id,
       ownerId: session.user.id,
     });
 
-    // Prepare registration data
     const data = membersId.map((member: string) => ({
       groupId: new mongoose.Types.ObjectId(group._id),
       eventId: new mongoose.Types.ObjectId(params.id),
       userId: new mongoose.Types.ObjectId(member),
     }));
 
-    // Insert registrations
     const groupRegistered = await GroupRegistration.insertMany(data);
 
     if (!groupRegistered) {
